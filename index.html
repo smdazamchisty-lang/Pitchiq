@@ -1,256 +1,314 @@
-#!/usr/bin/env python3
-"""
-process_video.py
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CreaseVision CRM & Analytics Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0b1329; color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0b1329; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    </style>
+</head>
+<body class="font-sans antialiased flex flex-col h-screen relative overflow-hidden">
 
-Minimal cricket ball detector + speed estimator prototype.
+    <!-- Top Navigation Bar -->
+    <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 h-16 flex items-center justify-between shrink-0 z-40">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">🏏</span>
+            <span class="font-bold text-xl tracking-tight bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                CreaseVision Pro CRM
+            </span>
+            <span class="bg-emerald-500/10 text-emerald-400 text-xs px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">Live Server</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <!-- Simulated Payment Portal Trigger for presentation -->
+            <button id="triggerPaymentBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-700">
+                Simulate Subscription Renew
+            </button>
+            <button id="cameraToggle" class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-lg shadow-cyan-600/20">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Initialize Pitch Feed
+            </button>
+        </div>
+    </nav>
 
-Usage:
-  python process_video.py --video input.mp4 --output output.mp4 --model models/yolov8-ball.pt
+    <!-- Master Layout Split Screen -->
+    <div class="flex flex-1 overflow-hidden z-30">
+        
+        <!-- Left Column: Core CRM & Live Telemetry Stream -->
+        <div class="w-2/3 p-6 flex flex-col space-y-6 overflow-y-auto">
+            
+            <!-- Quick Profiles Grid (CRM Panel) -->
+            <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Session Athlete (CRM Link)</h2>
+                    <span class="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Account Current</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="h-12 w-12 rounded-full bg-gradient-to-tr from-cyan-500 to-emerald-500 flex items-center justify-center font-bold text-lg shadow-inner">
+                            JM
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-100">James Maxwell</h3>
+                            <p class="text-xs text-slate-400">ID: #CRM-9082 • Right-Arm Fast Medium</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-400 block">Session Target</span>
+                        <span class="text-sm font-semibold text-emerald-400 font-mono">Consistent Length Line (&gt;135 km/h)</span>
+                    </div>
+                </div>
+            </section>
 
-One-time calibration: click 4 image points (clockwise or any order) on the pitch that map to known real-world coordinates
-(enter the x,y in meters for each clicked point). The script computes a homography to map image->ground plane (meters).
+            <!-- Live Broadcast Video Capture Panel -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col flex-1 min-h-[350px]">
+                <div class="p-4 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
+                    <h2 class="font-semibold text-slate-200 flex items-center gap-2">
+                        <span id="statusIndicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                        Hardware Capture & Computer Vision Overlay
+                    </h2>
+                    <span class="text-xs bg-slate-800 px-2.5 py-1 rounded-md text-cyan-400 font-mono tracking-wider">YOLOv8-BALL.PT ACTIVE</span>
+                </div>
+                
+                <!-- Live Video Feed Elements -->
+                <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+                    <div id="videoPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 z-10 transition-opacity duration-300">
+                        <span class="text-4xl mb-2">📹</span>
+                        <p class="text-sm">Camera Stream Offline. Click "Initialize Pitch Feed" to activate.</p>
+                    </div>
+                    <video id="webcam" class="w-full h-full object-cover hidden" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none hidden"></canvas>
+                </div>
+            </div>
 
-Notes:
-- Requires a YOLOv8 model trained to detect the ball (single class).
-- This prototype assumes one dominant ball detection per frame.
-"""
-import argparse
-import cv2
-import numpy as np
-import time
-import pandas as pd
-from ultralytics import YOLO
-from scipy.spatial.distance import euclidean
-from tqdm import tqdm
+            <!-- Instant Metrics Strip -->
+            <div class="grid grid-cols-3 gap-4 shrink-0">
+                <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4">
+                    <span class="text-xs text-slate-400 block">Latest Speed Delivery</span>
+                    <span id="liveSpeed" class="text-2xl font-bold font-mono text-cyan-400">-- km/h</span>
+                </div>
+                <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4">
+                    <span class="text-xs text-slate-400 block">Delivery Classification</span>
+                    <span id="liveStyle" class="text-2xl font-bold font-mono text-indigo-400">Pending</span>
+                </div>
+                <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4">
+                    <span class="text-xs text-slate-400 block">Homography Variance</span>
+                    <span class="text-2xl font-bold font-mono text-emerald-400">&sigma; = 0.02m</span>
+                </div>
+            </div>
+        </div>
 
-# Speed classification thresholds (km/h)
-# You can tune these thresholds for your context
-FAST_KPH = 140
-MEDIUM_KPH = 120
+        <!-- Right Column: AI Analytics & Performance Assistant Chatbot -->
+        <div class="w-1/3 border-l border-slate-800 bg-slate-900/30 flex flex-col">
+            <div class="p-4 border-b border-slate-800 bg-slate-900/50">
+                <h2 class="font-bold text-slate-200 text-sm tracking-wide uppercase">AI Performance Analyst</h2>
+                <p class="text-xs text-slate-400">Ask for trajectory metrics, anomalies, or historical CRM trends.</p>
+            </div>
 
-def parse_args():
-    p = argparse.ArgumentParser()
-    p.add_argument("--video", required=True, help="Input video file")
-    p.add_argument("--output", default="output.mp4", help="Annotated output video")
-    p.add_argument("--model", default="models/yolov8-ball.pt", help="YOLOv8 model path")
-    p.add_argument("--conf", type=float, default=0.25, help="Detection confidence threshold")
-    p.add_argument("--min_area", type=int, default=20, help="Minimum bbox area in pixels to keep")
-    p.add_argument("--smooth_n", type=int, default=5, help="Smoothing window for speed (frames)")
-    return p.parse_args()
+            <!-- Chat Output Messages Area -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- System Welcome Message -->
+                <div class="flex items-start space-x-3 max-w-[85%]">
+                    <div class="h-7 w-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs shrink-0 border border-cyan-500/30">AI</div>
+                    <div class="bg-slate-800/80 text-slate-200 p-3 rounded-2xl rounded-tl-none text-sm leading-relaxed shadow-sm">
+                        Hello! I am your integrated CRM Analyst. I have access to James Maxwell's current video telemetry matrix. How can I help optimize their bowling mechanics today?
+                    </div>
+                </div>
+            </div>
 
-def click_points_and_get_homography(frame):
-    """
-    Interactive collection of 4 image points and mapping to real-world meters.
-    Returns homography H (3x3) mapping image (px) to ground plane (meters).
-    """
-    pts = []
-    clone = frame.copy()
-    window = "Click 4 ground points (corners/markers). Press ESC to cancel."
-    cv2.namedWindow(window)
-    def on_mouse(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            pts.append((x, y))
-            cv2.circle(clone, (x, y), 5, (0, 255, 0), -1)
-            cv2.imshow(window, clone)
+            <!-- Chat Inputs Console -->
+            <div class="p-4 border-t border-slate-800 bg-slate-900/60">
+                <form id="chatForm" class="flex items-center space-x-2">
+                    <input id="chatInput" type="text" autocomplete="off" placeholder="e.g., Analyze the release velocity drop off..." 
+                           class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500 transition">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-3 rounded-xl text-sm transition shadow-lg shadow-emerald-600/10">
+                        Ask
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 
-    cv2.setMouseCallback(window, on_mouse)
-    cv2.imshow(window, clone)
-    print("Click 4 image points on the pitch (clockwise or any order).")
-    while True:
-        cv2.imshow(window, clone)
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:  # ESC
-            break
-        if len(pts) >= 4:
-            break
-    cv2.destroyWindow(window)
-    if len(pts) < 4:
-        raise RuntimeError("Calibration cancelled or not enough points.")
+    <!-- ========================================== -->
+    <!-- PAYMENT SUCCESS / INVOICE MODAL SYSTEM     -->
+    <!-- ========================================== -->
+    <div id="paymentModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 hidden transition-all opacity-0 duration-300">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative transform scale-95 transition-all duration-300" id="modalCard">
+            
+            <!-- Checkmark Animation Header -->
+            <div class="flex flex-col items-center text-center mt-2">
+                <div class="h-16 w-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/10 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-slate-100">Payment Confirmed</h3>
+                <p class="text-xs text-slate-400 mt-1">Transaction ID: TXN-2983192083</p>
+            </div>
 
-    pts = np.array(pts, dtype=np.float32)
-    print("Enter the corresponding real-world coordinates (in meters) for the 4 clicked points.")
-    world_pts = []
-    for i in range(4):
-        s = input(f"Point {i+1} (format: x y) in meters: ")
-        xw, yw = map(float, s.strip().split())
-        world_pts.append([xw, yw])
-    world_pts = np.array(world_pts, dtype=np.float32)
-    H, status = cv2.findHomography(pts, world_pts, method=0)
-    if H is None:
-        raise RuntimeError("Homography estimation failed.")
-    print("Homography computed.")
-    return H
+            <!-- Invoice Details Block -->
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 mt-6 space-y-3 font-mono text-xs">
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Service:</span>
+                    <span class="text-slate-300 font-sans font-medium">CreaseVision Premium Suite</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Billing Period:</span>
+                    <span class="text-slate-300">Monthly Auto-Renew</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500">Payment Method:</span>
+                    <span class="text-slate-300">Visa ending in •••• 4921</span>
+                </div>
+                <hr class="border-slate-800/80 my-2">
+                <div class="flex justify-between text-sm font-sans font-bold">
+                    <span class="text-slate-200">Amount Charged:</span>
+                    <span class="text-emerald-400">$149.00 USD</span>
+                </div>
+            </div>
 
-def image_to_world(H, px):
-    """
-    Map pixel (x,y) to world coordinates (meters) by homography H.
-    px: (x, y)
-    Returns (X, Y) in meters (2D ground).
-    """
-    p = np.array([px[0], px[1], 1.0], dtype=np.float64)
-    w = H @ p
-    if w[2] == 0:
-        return None
-    w /= w[2]
-    return (float(w[0]), float(w[1]))
+            <!-- System Feature Checklist unlocked -->
+            <div class="mt-5 space-y-2">
+                <div class="flex items-center space-x-2 text-xs text-slate-400">
+                    <span class="text-emerald-400">&bull;</span>
+                    <span>YOLOv8 Ball Trajectory Analytics Unlocked</span>
+                </div>
+                <div class="flex items-center space-x-2 text-xs text-slate-400">
+                    <span class="text-emerald-400">&bull;</span>
+                    <span>Live Hardware Video Feed Access Ready</span>
+                </div>
+            </div>
 
-def classify_speed_kph(kph):
-    if np.isnan(kph):
-        return "unknown"
-    if kph >= FAST_KPH:
-        return "fast"
-    if kph >= MEDIUM_KPH:
-        return "medium"
-    return "slow"
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button id="closePaymentBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold py-3 rounded-xl transition">
+                    Go to Workspace
+                </button>
+                <button onclick="window.print()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white text-sm font-semibold py-3 rounded-xl transition shadow-lg shadow-cyan-600/20">
+                    Print Receipt
+                </button>
+            </div>
+        </div>
+    </div>
 
-def main():
-    args = parse_args()
-    vid = cv2.VideoCapture(args.video)
-    if not vid.isOpened():
-        raise RuntimeError("Cannot open video: " + args.video)
-    fps = vid.get(cv2.CAP_PROP_FPS) or 30.0
-    width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    <!-- Script Implementations (Camera Access, Visual Overlays, and UI Actions) -->
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('overlayCanvas');
+        const placeholder = document.getElementById('videoPlaceholder');
+        const camToggle = document.getElementById('cameraToggle');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const chatMessages = document.getElementById('chatMessages');
+        
+        // Modal Target Components
+        const paymentModal = document.getElementById('paymentModal');
+        const modalCard = document.getElementById('modalCard');
+        const triggerPaymentBtn = document.getElementById('triggerPaymentBtn');
+        const closePaymentBtn = document.getElementById('closePaymentBtn');
 
-    # Load YOLOv8 model
-    print("Loading YOLOv8 model:", args.model)
-    model = YOLO(args.model)
+        // Request Browser MediaStream Permissions for WebCam Device
+        camToggle.addEventListener('click', async () => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 1280, height: 720, facingMode: "environment" } 
+                    });
+                    video.srcObject = stream;
+                    video.classList.remove('hidden');
+                    canvas.classList.remove('hidden');
+                    placeholder.classList.add('opacity-0', 'pointer-events-none');
+                    statusIndicator.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+                    camToggle.innerHTML = "🎯 Active Feed Tracking";
+                    camToggle.className = "bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition pointer-events-none";
+                    
+                    startSimulatedTelemetry();
+                } catch (err) {
+                    alert("Camera initialization rejected or unavailable: " + err);
+                    console.error(err);
+                }
+            } else {
+                alert("WebRTC camera access API is not natively supported by this browser.");
+            }
+        });
 
-    # Calibration (homography)
-    print("Extracting a frame for calibration...")
-    ret, frame0 = vid.read()
-    if not ret:
-        raise RuntimeError("Failed to read frame for calibration")
-    H = None
-    try:
-        H = click_points_and_get_homography(frame0)
-    except Exception as e:
-        print("Calibration failed:", e)
-        print("Exiting.")
-        return
+        // Chat Form Engine Interceptor
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const query = chatInput.value.trim();
+            if(!query) return;
 
-    # Reset video to start
-    vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            appendMessage('user', query);
+            chatInput.value = '';
 
-    # Output writer
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out_vid = cv2.VideoWriter(args.output, fourcc, fps, (width, height))
+            setTimeout(() => {
+                let aiResponse = "I have reviewed the telemetry arrays. Based on the homography conversions, James is losing roughly 4% forward velocity right before the pitch bounce path.";
+                if(query.toLowerCase().includes('speed') || query.toLowerCase().includes('velocity')) {
+                    aiResponse = "Analyzing standard deviation: The last delivery tracked at 134.2 km/h. This matches consistent parameters configured in his profile metrics CRM ledger.";
+                }
+                appendMessage('ai', aiResponse);
+            }, 850);
+        });
 
-    # Process frames
-    prev_world = None
-    prev_time = None
-    speeds = []  # history of instantaneous speeds (m/s)
-    rows = []
-    frame_idx = 0
+        function appendMessage(sender, text) {
+            const container = document.createElement('div');
+            container.className = `flex items-start space-x-3 max-w-[85%] ${sender === 'user' ? 'ml-auto justify-end flex-row-reverse space-x-reverse' : ''}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = `h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border ${sender === 'user' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'}`;
+            avatar.innerText = sender === 'user' ? 'UR' : 'AI';
 
-    pbar = tqdm(total=total_frames or None, desc="Processing")
-    while True:
-        ret, frame = vid.read()
-        if not ret:
-            break
-        t_now = frame_idx / fps
-        # Run detection (single inference per frame)
-        results = model.predict(frame, conf=args.conf, imgsz=640, verbose=False)
-        # results is a list, we take first
-        detections = []
-        if len(results) > 0:
-            res = results[0]
-            # res.boxes.xyxyn or .xyxy, .cls, .conf
-            if hasattr(res, "boxes"):
-                boxes = res.boxes
-                for box in boxes:
-                    xyxy = box.xyxy.cpu().numpy().flatten()
-                    conf = float(box.conf.cpu().numpy().flatten()) if getattr(box, "conf", None) is not None else 0.0
-                    cls = int(box.cls.cpu().numpy().flatten()) if getattr(box, "cls", None) is not None else 0
-                    x1, y1, x2, y2 = map(int, xyxy[:4])
-                    area = (x2 - x1) * (y2 - y1)
-                    if area < args.min_area:
-                        continue
-                    cx = int((x1 + x2) / 2)
-                    cy = int((y1 + y2) / 2)
-                    detections.append({"xyxy": (x1, y1, x2, y2), "conf": conf, "cls": cls, "centroid": (cx, cy)})
-        # Pick best detection (highest conf) if multiple
-        ball_det = None
-        if len(detections) > 0:
-            detections = sorted(detections, key=lambda d: -d["conf"])
-            ball_det = detections[0]
+            const bubble = document.createElement('div');
+            bubble.className = `p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-slate-800/80 text-slate-200 rounded-tl-none'}`;
+            bubble.innerText = text;
 
-        world_pt = None
-        speed_mps = float("nan")
-        kph = float("nan")
-        style = "unknown"
-        if ball_det is not None:
-            cx, cy = ball_det["centroid"]
-            # Map to world meters
-            mapped = image_to_world(H, (cx, cy))
-            if mapped is not None:
-                world_pt = mapped  # (X, Y) meters
-                if prev_world is not None:
-                    dt = t_now - prev_time if prev_time is not None else 1.0 / fps
-                    if dt <= 0:
-                        dt = 1.0 / fps
-                    dist = euclidean(world_pt, prev_world)  # meters in ground plane
-                    speed_mps = dist / dt
-                    kph = speed_mps * 3.6
-                prev_world = world_pt
-                prev_time = t_now
+            container.appendChild(avatar);
+            container.appendChild(bubble);
+            chatMessages.appendChild(container);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
-        # smoothing
-        speeds.append(speed_mps if not np.isnan(speed_mps) else 0.0)
-        if len(speeds) > args.smooth_n:
-            smoothed = float(np.mean([s for s in speeds[-args.smooth_n:] if s > 0]))
-        else:
-            smoothed = float(np.mean([s for s in speeds if s > 0])) if any(np.array(speeds) > 0) else float("nan")
-        if not np.isnan(smoothed) and smoothed > 0:
-            kph = smoothed * 3.6
-            speed_mps = smoothed
-            style = classify_speed_kph(kph)
-        else:
-            style = "unknown"
+        // Simulates receiving live computational telemetry loops from a Python backend
+        function startSimulatedTelemetry() {
+            const speeds = [132.4, 135.1, 138.0, 134.2];
+            const styles = ["Medium", "Fast Medium", "Fast Medium", "Medium"];
+            let idx = 0;
 
-        # Annotate frame
-        annotated = frame.copy()
-        if ball_det is not None:
-            x1, y1, x2, y2 = ball_det["xyxy"]
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cx, cy = ball_det["centroid"]
-            cv2.circle(annotated, (cx, cy), 4, (0, 255, 0), -1)
-        # Overlay text
-        text1 = f"Frame: {frame_idx}"
-        text2 = f"Speed: {kph:.1f} km/h" if not np.isnan(kph) else "Speed: --"
-        text3 = f"Style: {style}"
-        cv2.putText(annotated, text1, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.putText(annotated, text2, (10, 45), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-        cv2.putText(annotated, text3, (10, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
+            setInterval(() => {
+                document.getElementById('liveSpeed').innerText = `${speeds[idx % speeds.length]} km/h`;
+                document.getElementById('liveStyle').innerText = styles[idx % styles.length];
+                idx++;
+            }, 3000);
+        }
 
-        out_vid.write(annotated)
+        // ==========================================
+        // INVOICE MODAL WINDOW MANAGEMENT LOGIC     
+        // ==========================================
+        function showPaymentModal() {
+            paymentModal.classList.remove('hidden');
+            setTimeout(() => {
+                paymentModal.classList.remove('opacity-0');
+                modalCard.classList.remove('scale-95');
+                modalCard.classList.add('scale-100');
+            }, 10);
+        }
 
-        rows.append({
-            "frame": frame_idx,
-            "time_s": t_now,
-            "pixel_cx": ball_det["centroid"][0] if ball_det else None,
-            "pixel_cy": ball_det["centroid"][1] if ball_det else None,
-            "world_x_m": world_pt[0] if world_pt else None,
-            "world_y_m": world_pt[1] if world_pt else None,
-            "speed_mps": speed_mps if not np.isnan(speed_mps) else None,
-            "speed_kph": kph if not np.isnan(kph) else None,
-            "style": style
-        })
+        function hidePaymentModal() {
+            paymentModal.classList.add('opacity-0');
+            modalCard.classList.remove('scale-100');
+            modalCard.classList.add('scale-95');
+            setTimeout(() => {
+                paymentModal.classList.add('hidden');
+            }, 300);
+        }
 
-        frame_idx += 1
-        pbar.update(1)
-
-    pbar.close()
-    vid.release()
-    out_vid.release()
-
-    # Save CSV
-    df = pd.DataFrame(rows)
-    csv_out = args.output.replace(".mp4", ".csv")
-    df.to_csv(csv_out, index=False)
-    print("Processing complete. Annotated video:", args.output)
-    print("Per-frame CSV:", csv_out)
-
-if __name__ == "__main__":
-    main()
+        triggerPaymentBtn.addEventListener('click', showPaymentModal);
+        closePaymentBtn.addEventListener('click', hidePaymentModal);
+    </script>
+</body>
+</html>
